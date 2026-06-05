@@ -41,4 +41,171 @@ class RCVIndicators:
         ctels_rcv = ctels_rcv.head(52)
         
         # Create datasets for different periods
-        ctels_rcvs = ctels_rcv[ctels_rcv['SEMAINE'].isin([S, Sm1])].copy()\n        ctels_rcvs['PERIODE'] = ctels_rcvs['SEMAINE']\n        \n        ctels_rcvm = ctels_rcv[ctels_rcv['SEMAINE'].isin([S, Sm1, Sm2, Sm3, Sm4, Sm5])].copy()\n        ctels_rcvm['PERIODE'] = 'MOIS'\n        \n        ctels_rcva = ctels_rcv.copy()\n        ctels_rcva['PERIODE'] = 'ANNEE'\n        \n        # Combine all datasets\n        ctels_rcv2 = pd.concat([ctels_rcvs, ctels_rcvm, ctels_rcva], ignore_index=True)\n        \n        # Calculate means by period for numeric columns\n        numeric_cols = ctels_rcv2.select_dtypes(include=[np.number]).columns.tolist()\n        numeric_cols = [col for col in numeric_cols if col not in ['PERIODE']]\n        \n        tabfinrcvtel = ctels_rcv2.groupby('PERIODE')[numeric_cols].mean()\n        \n        # Calculate average waiting times for EPA variants\n        waiting_time_calcs_epa = {\n            'TPSATTMRCVEPA': ('TPSREPRCVEPA', 'NBARRCVEPA'),\n            'TPSATTMRCVEPAASS': ('TPSREPRCVEPAASS', 'NBARRCVEPAASS'),\n            'TPSATTMRCVEPARES': ('TPSREPRCVEPARES', 'NBARRCVEPARES'),\n            'CTPSATTMRCVEPAASSBDDF': ('CTPSREPRCVEPAASSBDDF', 'CNBARRCVEPAASSBDDF'),\n            'CTPSATTMRCVEPAASSCDN': ('CTPSREPRCVEPAASSCDN', 'CNBARRCVEPAASSCDN'),\n            'CTPSATTMRCVEPAASSORA': ('CTPSREPRCVEPAASSORA', 'CNBARRCVEPAASSORA'),\n            'CTPSATTMRCVEPARESBDDF': ('CTPSREPRCVEPARESBDDF', 'CNBARRCVEPARESBDDF'),\n            'CTPSATTMRCVEPARESCDN': ('CTPSREPRCVEPARESCDN', 'CNBARRCVEPARESCDN'),\n        }\n        \n        for calc_col, (time_col, count_col) in waiting_time_calcs_epa.items():\n            if time_col in tabfinrcvtel.columns and count_col in tabfinrcvtel.columns:\n                tabfinrcvtel[calc_col] = np.where(\n                    tabfinrcvtel[count_col] > 0,\n                    tabfinrcvtel[time_col] / tabfinrcvtel[count_col],\n                    np.nan\n                )\n        \n        # Calculate average waiting times for PRE (Prevention) variants\n        waiting_time_calcs_pre = {\n            'TPSATTMRCVPRE': ('TPSREPRCVPRE', 'NBARRCVPRE'),\n            'TPSATTMRCVPREASS': ('TPSREPRCVPREASS', 'NBARRCVPREASS'),\n            'TPSATTMRCVPRERES': ('TPSREPRCVPRERES', 'NBARRCVPRERES'),\n            'CTPSATTMRCVPREASSBDDF': ('CTPSREPRCVPREASSBDDF', 'CNBARRCVPREASSBDDF'),\n            'CTPSATTMRCVPREINDASSBDDF': ('CTPSREPRCVPREINDASSBDDF', 'CNBARRCVPREINDASSBDDF'),\n            'CTPSATTMRCVPREADEASSBDDF': ('CTPSREPRCVPREADEASSBDDF', 'CNBARRCVPREADEASSBDDF'),\n            'CTPSATTMRCVPREASSCDN': ('CTPSREPRCVPREASSCDN', 'CNBARRCVPREASSCDN'),\n            'CTPSATTMRCVPREASSBRS': ('CTPSREPRCVPREASSBRS', 'CNBARRCVPREASSBRS'),\n            'CTPSATTMRCVPRERESBDDF': ('CTPSREPRCVPRERESBDDF', 'CNBARRCVPRERESBDDF'),\n            'CTPSATTMRCVPREINDRESBDDF': ('CTPSREPRCVPREINDRESBDDF', 'CNBARRCVPREINDRESBDDF'),\n            'CTPSATTMRCVPREADERESBDDF': ('CTPSREPRCVPREADERESBDDF', 'CNBARRCVPREADERESBDDF'),\n            'CTPSATTMRCVPRERESCDN': ('CTPSREPRCVPRERESCDN', 'CNBARRCVPRERESCDN'),\n        }\n        \n        for calc_col, (time_col, count_col) in waiting_time_calcs_pre.items():\n            if time_col in tabfinrcvtel.columns and count_col in tabfinrcvtel.columns:\n                tabfinrcvtel[calc_col] = np.where(\n                    tabfinrcvtel[count_col] > 0,\n                    tabfinrcvtel[time_col] / tabfinrcvtel[count_col],\n                    np.nan\n                )\n        \n        # Transpose for export (periods as columns)\n        tabfinrcvtel = tabfinrcvtel.T\n        \n        return tabfinrcvtel\n    \n    def process_bo_data(self, bogedrcc_df, S, Sm1, Sm2, Sm3, Sm4, Sm5, SAM1, Sp1):\n        \"\"\"\n        Process BO (Back Office) indicators for RCV.\n        Imports template file and processes EPA and PREV metrics.\n        \n        Parameters:\n        -----------\n        bogedrcc_df : pd.DataFrame\n            BO data (can be from Excel template)\n        S, Sm1, Sm2, Sm3, Sm4, Sm5 : str\n            Week identifiers\n        SAM1 : str\n            Week from 52 weeks ago\n        Sp1 : str\n            Next week identifier\n        \"\"\"\n        \n        # In real usage, this would import from Excel:\n        # try:\n        #     import_df = pd.read_excel(f\"{self.rep_fic_rcv}/{self.nom_fic_rcv}\", sheet_name='Feuil1')\n        # except Exception as e:\n        #     print(f\"Error reading template file: {e}\")\n        #     return None\n        \n        # For testing, use provided DataFrame\n        import_df = bogedrcc_df.copy()\n        \n        # Transform week format: \"SXXJJ\" -> \"SXXYY\"\n        if 'semaine' in import_df.columns:\n            import_df['semaine'] = import_df['semaine'].apply(\n                lambda x: f\"S{str(x)[2:4]}{str(x)[6:8]}\" if isinstance(x, str) and len(str(x)) >= 8 else x\n            )\n        \n        # Filter data\n        import2 = import_df.copy()\n        if 'semaine' in import2.columns:\n            import2 = import2[import2['semaine'] != SAM1].copy()\n            import2 = import2[import2['semaine'] != Sp1].copy()\n        \n        # Sort by week descending\n        if 'semaine' in import2.columns:\n            import2 = import2.sort_values('semaine', ascending=False)\n        \n        # Keep only last 52 records\n        import2 = import2.head(52)\n        \n        # Create datasets for different periods\n        week_col = 'semaine' if 'semaine' in import2.columns else 'SEMAINE'\n        \n        borcfs = import2[import2[week_col].isin([S, Sm1])].copy()\n        borcfs['PERIODE'] = borcfs[week_col]\n        \n        borcfm = import2[import2[week_col].isin([S, Sm1, Sm2, Sm3, Sm4, Sm5])].copy()\n        borcfm['PERIODE'] = 'MOIS'\n        \n        borcfa = import2.copy()\n        borcfa['PERIODE'] = 'ANNEE'\n        \n        # Combine all datasets\n        borcf2 = pd.concat([borcfs, borcfm, borcfa], ignore_index=True)\n        \n        # Select EPA and PREV columns (wildcard matching)\n        epa_prev_cols = [col for col in borcf2.columns \n                        if col.upper().startswith('EPA') or col.upper().startswith('PREV')]\n        \n        if not epa_prev_cols:\n            # If no EPA/PREV columns, return empty with PERIODE\n            borcf3 = borcf2.groupby('PERIODE').size().to_frame(name='count').drop('count', axis=1)\n            return borcf3\n        \n        # Calculate means by period\n        borcf3 = borcf2.groupby('PERIODE')[epa_prev_cols].mean()\n        \n        # Transpose for export (periods as columns)\n        borcf3 = borcf3.T\n        \n        return borcf3\n    \n    def export_to_excel(self, tabfinrcvtel, borcf3, output_path):\n        \"\"\"\n        Export results to Excel.\n        \n        Parameters:\n        -----------\n        tabfinrcvtel : pd.DataFrame\n            Telephone indicators\n        borcf3 : pd.DataFrame\n            BO indicators\n        output_path : str\n            Path to Excel file\n        \"\"\"\n        \n        try:\n            with pd.ExcelWriter(output_path, engine='openpyxl', mode='a') as writer:\n                tabfinrcvtel.to_excel(writer, sheet_name='DONRCV')\n                borcf3.to_excel(writer, sheet_name='DONBORCV')\n            print(f\"✓ RCV indicators exported to: {output_path}\")\n            return True\n        except Exception as e:\n            print(f\"✗ Error exporting RCV indicators: {e}\")\n            return False\n
+        ctels_rcvs = ctels_rcv[ctels_rcv['SEMAINE'].isin([S, Sm1])].copy()
+        ctels_rcvs['PERIODE'] = ctels_rcvs['SEMAINE']
+        
+        ctels_rcvm = ctels_rcv[ctels_rcv['SEMAINE'].isin([S, Sm1, Sm2, Sm3, Sm4, Sm5])].copy()
+        ctels_rcvm['PERIODE'] = 'MOIS'
+        
+        ctels_rcva = ctels_rcv.copy()
+        ctels_rcva['PERIODE'] = 'ANNEE'
+        
+        # Combine all datasets
+        ctels_rcv2 = pd.concat([ctels_rcvs, ctels_rcvm, ctels_rcva], ignore_index=True)
+        
+        # Calculate means by period for numeric columns
+        numeric_cols = ctels_rcv2.select_dtypes(include=[np.number]).columns.tolist()
+        numeric_cols = [col for col in numeric_cols if col not in ['PERIODE']]
+        
+        tabfinrcvtel = ctels_rcv2.groupby('PERIODE')[numeric_cols].mean()
+        
+        # Calculate average waiting times for EPA variants
+        waiting_time_calcs_epa = {
+            'TPSATTMRCVEPA': ('TPSREPRCVEPA', 'NBARRCVEPA'),
+            'TPSATTMRCVEPAASS': ('TPSREPRCVEPAASS', 'NBARRCVEPAASS'),
+            'TPSATTMRCVEPARES': ('TPSREPRCVEPARES', 'NBARRCVEPARES'),
+            'CTPSATTMRCVEPAASSBDDF': ('CTPSREPRCVEPAASSBDDF', 'CNBARRCVEPAASSBDDF'),
+            'CTPSATTMRCVEPAASSCDN': ('CTPSREPRCVEPAASSCDN', 'CNBARRCVEPAASSCDN'),
+            'CTPSATTMRCVEPAASSORA': ('CTPSREPRCVEPAASSORA', 'CNBARRCVEPAASSORA'),
+            'CTPSATTMRCVEPARESBDDF': ('CTPSREPRCVEPARESBDDF', 'CNBARRCVEPARESBDDF'),
+            'CTPSATTMRCVEPARESCDN': ('CTPSREPRCVEPARESCDN', 'CNBARRCVEPARESCDN'),
+        }
+        
+        for calc_col, (time_col, count_col) in waiting_time_calcs_epa.items():
+            if time_col in tabfinrcvtel.columns and count_col in tabfinrcvtel.columns:
+                tabfinrcvtel[calc_col] = np.where(
+                    tabfinrcvtel[count_col] > 0,
+                    tabfinrcvtel[time_col] / tabfinrcvtel[count_col],
+                    np.nan
+                )
+        
+        # Calculate average waiting times for PRE (Prevention) variants
+        waiting_time_calcs_pre = {
+            'TPSATTMRCVPRE': ('TPSREPRCVPRE', 'NBARRCVPRE'),
+            'TPSATTMRCVPREASS': ('TPSREPRCVPREASS', 'NBARRCVPREASS'),
+            'TPSATTMRCVPRERES': ('TPSREPRCVPRERES', 'NBARRCVPRERES'),
+            'CTPSATTMRCVPREASSBDDF': ('CTPSREPRCVPREASSBDDF', 'CNBARRCVPREASSBDDF'),
+            'CTPSATTMRCVPREINDASSBDDF': ('CTPSREPRCVPREINDASSBDDF', 'CNBARRCVPREINDASSBDDF'),
+            'CTPSATTMRCVPREADEASSBDDF': ('CTPSREPRCVPREADEASSBDDF', 'CNBARRCVPREADEASSBDDF'),
+            'CTPSATTMRCVPREASSCDN': ('CTPSREPRCVPREASSCDN', 'CNBARRCVPREASSCDN'),
+            'CTPSATTMRCVPREASSBRS': ('CTPSREPRCVPREASSBRS', 'CNBARRCVPREASSBRS'),
+            'CTPSATTMRCVPRERESBDDF': ('CTPSREPRCVPRERESBDDF', 'CNBARRCVPRERESBDDF'),
+            'CTPSATTMRCVPREINDRESBDDF': ('CTPSREPRCVPREINDRESBDDF', 'CNBARRCVPREINDRESBDDF'),
+            'CTPSATTMRCVPREADERESBDDF': ('CTPSREPRCVPREADERESBDDF', 'CNBARRCVPREADERESBDDF'),
+            'CTPSATTMRCVPRERESCDN': ('CTPSREPRCVPRERESCDN', 'CNBARRCVPRERESCDN'),
+        }
+        
+        for calc_col, (time_col, count_col) in waiting_time_calcs_pre.items():
+            if time_col in tabfinrcvtel.columns and count_col in tabfinrcvtel.columns:
+                tabfinrcvtel[calc_col] = np.where(
+                    tabfinrcvtel[count_col] > 0,
+                    tabfinrcvtel[time_col] / tabfinrcvtel[count_col],
+                    np.nan
+                )
+        
+        # Transpose for export (periods as columns)
+        tabfinrcvtel = tabfinrcvtel.T
+        
+        return tabfinrcvtel
+    
+    def process_bo_data(self, bogedrcc_df, S, Sm1, Sm2, Sm3, Sm4, Sm5, SAM1, Sp1):
+        """
+        Process BO (Back Office) indicators for RCV.
+        Imports template file and processes EPA and PREV metrics.
+        
+        Parameters:
+        -----------
+        bogedrcc_df : pd.DataFrame
+            BO data (can be from Excel template)
+        S, Sm1, Sm2, Sm3, Sm4, Sm5 : str
+            Week identifiers
+        SAM1 : str
+            Week from 52 weeks ago
+        Sp1 : str
+            Next week identifier
+        """
+        
+        # In real usage, this would import from Excel:
+        # try:
+        #     import_df = pd.read_excel(f"{self.rep_fic_rcv}/{self.nom_fic_rcv}", sheet_name='Feuil1')
+        # except Exception as e:
+        #     print(f"Error reading template file: {e}")
+        #     return None
+        
+        # For testing, use provided DataFrame
+        import_df = bogedrcc_df.copy()
+        
+        # Transform week format: "SXXJJ" -> "SXXYY"
+        if 'semaine' in import_df.columns:
+            import_df['semaine'] = import_df['semaine'].apply(
+                lambda x: f"S{str(x)[2:4]}{str(x)[6:8]}" if isinstance(x, str) and len(str(x)) >= 8 else x
+            )
+        
+        # Filter data
+        import2 = import_df.copy()
+        if 'semaine' in import2.columns:
+            import2 = import2[import2['semaine'] != SAM1].copy()
+            import2 = import2[import2['semaine'] != Sp1].copy()
+        
+        # Sort by week descending
+        if 'semaine' in import2.columns:
+            import2 = import2.sort_values('semaine', ascending=False)
+        
+        # Keep only last 52 records
+        import2 = import2.head(52)
+        
+        # Create datasets for different periods
+        week_col = 'semaine' if 'semaine' in import2.columns else 'SEMAINE'
+        
+        borcfs = import2[import2[week_col].isin([S, Sm1])].copy()
+        borcfs['PERIODE'] = borcfs[week_col]
+        
+        borcfm = import2[import2[week_col].isin([S, Sm1, Sm2, Sm3, Sm4, Sm5])].copy()
+        borcfm['PERIODE'] = 'MOIS'
+        
+        borcfa = import2.copy()
+        borcfa['PERIODE'] = 'ANNEE'
+        
+        # Combine all datasets
+        borcf2 = pd.concat([borcfs, borcfm, borcfa], ignore_index=True)
+        
+        # Select EPA and PREV columns (wildcard matching)
+        epa_prev_cols = [col for col in borcf2.columns 
+                        if col.upper().startswith('EPA') or col.upper().startswith('PREV')]
+        
+        if not epa_prev_cols:
+            # If no EPA/PREV columns, return empty with PERIODE
+            borcf3 = borcf2.groupby('PERIODE').size().to_frame(name='count').drop('count', axis=1)
+            return borcf3
+        
+        # Calculate means by period
+        borcf3 = borcf2.groupby('PERIODE')[epa_prev_cols].mean()
+        
+        # Transpose for export (periods as columns)
+        borcf3 = borcf3.T
+        
+        return borcf3
+    
+    def export_to_excel(self, tabfinrcvtel, borcf3, output_path):
+        """
+        Export results to Excel.
+        
+        Parameters:
+        -----------
+        tabfinrcvtel : pd.DataFrame
+            Telephone indicators
+        borcf3 : pd.DataFrame
+            BO indicators
+        output_path : str
+            Path to Excel file
+        """
+        
+        try:
+            with pd.ExcelWriter(output_path, engine='openpyxl', mode='a') as writer:
+                tabfinrcvtel.to_excel(writer, sheet_name='DONRCV')
+                borcf3.to_excel(writer, sheet_name='DONBORCV')
+            print(f"✓ RCV indicators exported to: {output_path}")
+            return True
+        except Exception as e:
+            print(f"✗ Error exporting RCV indicators: {e}")
+            return False
